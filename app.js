@@ -566,6 +566,7 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
             borderWidth: 1.5,
             pointRadius: 0,
             fill: false,
+            borderDash: [6, 4],
             tension: 0.1
         }
     ];
