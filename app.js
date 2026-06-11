@@ -340,14 +340,20 @@ function syncXAxis(sourceChart, targetChart) {
     isSyncing = false;
 }
 
+// Get default zoom size based on the timeframe
+function getDefaultZoom(N) {
+    if (currentTimeframe === 'daily') return Math.min(N, 22);
+    if (currentTimeframe === 'weekly') return Math.min(N, 12);
+    if (currentTimeframe === 'monthly') return Math.min(N, 36);
+    if (currentTimeframe === 'yearly') return Math.min(N, 10);
+    return N;
+}
+
 // Extract the visible data range from resampled stock data
 function getVisibleStockData(chart, resampledData) {
     if (!chart || !chart.scales || !chart.scales.x) {
         const N = resampledData.length;
-        let defaultZoom = N;
-        if (currentTimeframe === 'daily') defaultZoom = 252;
-        else if (currentTimeframe === 'weekly') defaultZoom = 104;
-        else if (currentTimeframe === 'monthly') defaultZoom = 36;
+        const defaultZoom = getDefaultZoom(N);
         const minIndex = Math.max(0, N - defaultZoom);
         return resampledData.slice(minIndex, N);
     }
@@ -370,10 +376,7 @@ function updateInsightsFromChart() {
 function handleChartReset(chart) {
     if (!chart) return;
     const N = chart.data.labels.length;
-    let defaultZoom = N;
-    if (currentTimeframe === 'daily') defaultZoom = 252;
-    else if (currentTimeframe === 'weekly') defaultZoom = 104;
-    else if (currentTimeframe === 'monthly') defaultZoom = 36;
+    const defaultZoom = getDefaultZoom(N);
     
     chart.options.scales.x.min = Math.max(0, N - defaultZoom);
     chart.options.scales.x.max = N - 1;
@@ -508,10 +511,7 @@ function updateRelativeChart() {
     relativeChart.data.datasets = datasets;
     
     const N = labels.length;
-    let defaultZoom = N;
-    if (currentTimeframe === 'daily') defaultZoom = 252;
-    else if (currentTimeframe === 'weekly') defaultZoom = 104;
-    else if (currentTimeframe === 'monthly') defaultZoom = 36;
+    const defaultZoom = getDefaultZoom(N);
     
     const minIndex = Math.max(0, N - defaultZoom);
     const maxIndex = N - 1;
@@ -547,10 +547,7 @@ function updateSelectedStockView(ticker) {
     updateMomentumChart(labels, k, d);
     
     const N = labels.length;
-    let defaultZoom = N;
-    if (currentTimeframe === 'daily') defaultZoom = 252;
-    else if (currentTimeframe === 'weekly') defaultZoom = 104;
-    else if (currentTimeframe === 'monthly') defaultZoom = 36;
+    const defaultZoom = getDefaultZoom(N);
     
     const minIndex = Math.max(0, N - defaultZoom);
     const maxIndex = N - 1;
