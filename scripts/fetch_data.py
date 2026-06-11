@@ -24,10 +24,10 @@ def main():
     
     print("Fetching data from Yahoo Finance...")
     
-    # We fetch from late 2019 to ensure we have historical data from 2020-01-01
-    # and MA50 calculations are fully populated starting 2020-01-01.
+    # We fetch from early 2016 to ensure we have historical data from 2016-06-01
+    # and MA50 calculations are fully populated starting 2016-06-01.
     end_date = datetime.date.today()
-    start_date = datetime.date(2019, 10, 1)
+    start_date = datetime.date(2016, 1, 1)
     
     prices_data = {}
     raw_dfs = {}
@@ -78,9 +78,9 @@ def main():
         raise Exception("Failed to fetch IHSG data. Cannot proceed.")
         
     ihsg_df = raw_dfs['IHSG']
-    # Select all trading days starting from 2020-01-01
-    ihsg_df_from_2020 = ihsg_df[ihsg_df['date'] >= '2020-01-01']
-    active_dates = ihsg_df_from_2020['date'].tolist()
+    # Select all trading days starting from 2016-06-01
+    ihsg_df_from_2016 = ihsg_df[ihsg_df['date'] >= '2016-06-01']
+    active_dates = ihsg_df_from_2016['date'].tolist()
     
     # We will compute indicators for each stock using its full history first,
     # so we don't have NaN values at the beginning of the 252-day window.
