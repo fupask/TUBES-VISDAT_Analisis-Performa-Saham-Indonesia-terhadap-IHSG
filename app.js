@@ -227,9 +227,26 @@ function resampleDataset(data, timeframe) {
     const resampled = [];
     Object.keys(groups).sort().forEach(key => {
         const group = groups[key];
-        // Take the last trading record of the group to represent the period close
-        const lastItem = group[group.length - 1];
-        resampled.push({ ...lastItem });
+        const firstItem = group[0];
+        const lastItem  = group[group.length - 1];
+        
+        // Aggregate OHLC and volume properly across the period
+        const periodHigh = Math.max(...group.map(g => g.high));
+        const periodLow  = Math.min(...group.map(g => g.low));
+        const periodVolume = group.reduce((sum, g) => sum + g.volume, 0);
+        
+        // Determine warna_volume based on period close vs period open
+        const warnaVolume = (lastItem.close >= firstItem.open) ? '#12C286' : '#FF5555';
+        
+        resampled.push({
+            ...lastItem,
+            open:   firstItem.open,
+            high:   periodHigh,
+            low:    periodLow,
+            close:  lastItem.close,
+            volume: periodVolume,
+            warna_volume: warnaVolume
+        });
     });
     
     // Recalculate rebased percentage prices relative to the first day of resampled timeframe
@@ -253,38 +270,67 @@ function getMondayDate(dateStr) {
 }
 
 // Helper to determine min and max values of visible data arrays for vertical scaling
+// Handles both plain numbers (index-based axis) and OHLC/line objects ({x, o, h, l, c} or {x, y})
 function autoScaleY(chart) {
     if (!chart || !chart.scales || !chart.scales.x || !chart.scales.y) return;
     
     const xScale = chart.scales.x;
-    const minIndex = Math.max(0, Math.floor(xScale.min));
-    const maxIndex = Math.min(chart.data.labels.length - 1, Math.ceil(xScale.max));
+    const xMin = xScale.min;
+    const xMax = xScale.max;
     
     let minVal = Infinity;
     let maxVal = -Infinity;
     
-    chart.data.datasets.forEach((dataset, index) => {
-        // Only scale based on visible datasets
-        if (chart.isDatasetVisible(index)) {
-            for (let i = minIndex; i <= maxIndex; i++) {
-                const val = dataset.data[i];
-                if (val !== null && val !== undefined && !isNaN(val)) {
-                    if (val < minVal) minVal = val;
-                    if (val > maxVal) maxVal = val;
+    const isTimeScale = xScale.type === 'time' || xScale.type === 'timeseries';
+    
+    chart.data.datasets.forEach((dataset, dsIndex) => {
+        if (!chart.isDatasetVisible(dsIndex)) return;
+        
+        dataset.data.forEach((item, idx) => {
+            if (item === null || item === undefined) return;
+            
+            let valMin, valMax;
+            
+            if (isTimeScale) {
+                // For time scales, items are objects like {x, o, h, l, c} or {x, y}
+                const t = item.x;
+                if (t < xMin || t > xMax) return;
+                
+                if (item.o !== undefined && item.h !== undefined && item.l !== undefined && item.c !== undefined) {
+                    // Candlestick data
+                    valMin = item.l;
+                    valMax = item.h;
+                } else if (item.y !== undefined) {
+                    // Line data or Bar data (volume)
+                    valMin = item.y;
+                    valMax = item.y;
+                } else {
+                    return;
                 }
+            } else {
+                // For category scales, items are plain numbers or {y} objects, and checked by index
+                if (idx < xMin || idx > xMax) return;
+                
+                const val = (typeof item === 'object' && item.y !== undefined) ? item.y : item;
+                if (typeof val !== 'number' || isNaN(val)) return;
+                valMin = val;
+                valMax = val;
             }
-        }
+            
+            if (valMin < minVal) minVal = valMin;
+            if (valMax > maxVal) maxVal = valMax;
+        });
     });
     
     if (minVal !== Infinity && maxVal !== -Infinity) {
         if (chart.canvas.id === 'volumeChart') {
             chart.options.scales.y.min = 0;
-            chart.options.scales.y.max = maxVal * 1.1; // 10% buffer
+            chart.options.scales.y.max = maxVal * 1.1; // 10% headroom
         } else {
             const range = maxVal - minVal;
-            const buffer = range * 0.05 || 1.0; // 5% buffer on top/bottom
-            chart.options.scales.y.min = minVal - buffer;
-            chart.options.scales.y.max = maxVal + buffer;
+            const padding = range * 0.05 || 1.0;
+            chart.options.scales.y.min = minVal - padding;
+            chart.options.scales.y.max = maxVal + padding;
         }
     }
 }
@@ -317,13 +363,23 @@ function getDefaultZoom(N) {
 function getVisibleStockData(chart, resampledData) {
     if (!chart || !chart.scales || !chart.scales.x) {
         const N = resampledData.length;
-        const defaultZoom = getDefaultZoom(N);
-        const minIndex = Math.max(0, N - defaultZoom);
-        return resampledData.slice(minIndex, N);
+        return resampledData.slice(Math.max(0, N - getDefaultZoom(N)));
     }
-    const minIndex = Math.max(0, Math.floor(chart.scales.x.min));
-    const maxIndex = Math.min(resampledData.length - 1, Math.ceil(chart.scales.x.max));
-    return resampledData.slice(minIndex, maxIndex + 1);
+    
+    const isTimeScale = chart.options.scales.x.type === 'timeseries' || chart.options.scales.x.type === 'time';
+    
+    if (isTimeScale) {
+        const xMin = chart.scales.x.min;
+        const xMax = chart.scales.x.max;
+        return resampledData.filter(item => {
+            const t = new Date(item.date).getTime();
+            return t >= xMin && t <= xMax;
+        });
+    } else {
+        const minIndex = Math.max(0, Math.floor(chart.scales.x.min));
+        const maxIndex = Math.min(resampledData.length - 1, Math.ceil(chart.scales.x.max));
+        return resampledData.slice(minIndex, maxIndex + 1);
+    }
 }
 
 // Update insights box dynamically based on the current chart view range
@@ -339,11 +395,28 @@ function updateInsightsFromChart() {
 // Handle double click reset interaction
 function handleChartReset(chart) {
     if (!chart) return;
-    const N = chart.data.labels.length;
-    const defaultZoom = getDefaultZoom(N);
     
-    chart.options.scales.x.min = Math.max(0, N - defaultZoom);
-    chart.options.scales.x.max = N - 1;
+    const isTimeScale = chart.options.scales.x.type === 'timeseries' || chart.options.scales.x.type === 'time';
+    
+    if (isTimeScale) {
+        const dataset = chart.data.datasets[0];
+        if (dataset && dataset.data && dataset.data.length > 0) {
+            const data = dataset.data;
+            const N = data.length;
+            const defaultZoom = getDefaultZoom(N);
+            
+            const minIndex = Math.max(0, N - defaultZoom);
+            const maxIndex = N - 1;
+            
+            chart.options.scales.x.min = data[minIndex].x;
+            chart.options.scales.x.max = data[maxIndex].x;
+        }
+    } else {
+        const N = chart.data.labels ? chart.data.labels.length : 0;
+        const defaultZoom = getDefaultZoom(N);
+        chart.options.scales.x.min = Math.max(0, N - defaultZoom);
+        chart.options.scales.x.max = N - 1;
+    }
     
     autoScaleY(chart);
     chart.update('none');
@@ -500,31 +573,27 @@ function updateSelectedStockView(ticker) {
     if (!stockData) return;
     
     const resampled = resampleDataset(stockData, currentTimeframe);
-    const labels = resampled.map(item => item.date);
-    const closePrices = resampled.map(item => item.close);
-    const ma20 = resampled.map(item => item.ma20);
-    const ma50 = resampled.map(item => item.ma50);
-    const volume = resampled.map(item => item.volume);
-    const warnaVolume = resampled.map(item => item.warna_volume);
     
-    updateTrendChart(labels, closePrices, ma20, ma50, ticker);
-    updateVolumeChart(labels, volume, warnaVolume);
+    updateTrendChart(resampled, ticker);
+    updateVolumeChart(resampled);
     
-    const N = labels.length;
+    const N = resampled.length;
     const defaultZoom = getDefaultZoom(N);
     
     const minIndex = Math.max(0, N - defaultZoom);
     const maxIndex = N - 1;
     
-    if (trendChart) {
-        trendChart.options.scales.x.min = minIndex;
-        trendChart.options.scales.x.max = maxIndex;
+    if (trendChart && trendChart.data.datasets[0] && trendChart.data.datasets[0].data.length > 0) {
+        const data = trendChart.data.datasets[0].data;
+        trendChart.options.scales.x.min = data[minIndex].x;
+        trendChart.options.scales.x.max = data[maxIndex].x;
         autoScaleY(trendChart);
         trendChart.update('none');
     }
-    if (volumeChart) {
-        volumeChart.options.scales.x.min = minIndex;
-        volumeChart.options.scales.x.max = maxIndex;
+    if (volumeChart && volumeChart.data.datasets[0] && volumeChart.data.datasets[0].data.length > 0) {
+        const data = volumeChart.data.datasets[0].data;
+        volumeChart.options.scales.x.min = data[minIndex].x;
+        volumeChart.options.scales.x.max = data[maxIndex].x;
         autoScaleY(volumeChart);
         volumeChart.update('none');
     }
@@ -533,260 +602,276 @@ function updateSelectedStockView(ticker) {
     generateInsights(ticker, visibleData);
 }
 
-// Chart 2: Trend Chart
-function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
+// Chart 2: Trend Chart (Candlestick + MA lines)
+function updateTrendChart(resampled, ticker) {
     const ctx = document.getElementById('trendChart').getContext('2d');
-    const colorTheme = ASSET_COLORS[ticker] || '#0066FF';
+    
+    if (trendChart) {
+        trendChart.destroy();
+        trendChart = null;
+    }
+    
+    const candleData = resampled.map(item => ({
+        x: new Date(item.date).getTime(),
+        o: item.open,
+        h: item.high,
+        l: item.low,
+        c: item.close
+    }));
+    
+    const ma20Data = resampled.map(item => ({
+        x: new Date(item.date).getTime(),
+        y: item.ma20 != null ? item.ma20 : null
+    }));
+    const ma50Data = resampled.map(item => ({
+        x: new Date(item.date).getTime(),
+        y: item.ma50 != null ? item.ma50 : null
+    }));
     
     const datasets = [
         {
-            label: 'Harga Penutupan',
-            data: closePrices,
-            borderColor: '#FFFFFF',
-            borderWidth: 2,
-            pointRadius: 0,
-            pointHoverRadius: 4,
-            fill: false,
-            tension: 0.1
+            type: 'candlestick',
+            label: ticker,
+            data: candleData,
+            color: {
+                up:        '#12C286',  // bullish (close >= open)
+                down:      '#FF5555',  // bearish (close < open)
+                unchanged: '#9CA3AF'   // flat
+            },
+            borderColor: {
+                up:        '#12C286',
+                down:      '#FF5555',
+                unchanged: '#9CA3AF'
+            }
         },
         {
+            type: 'line',
             label: 'MA20',
-            data: ma20,
-            borderColor: '#FF5555',
+            data: ma20Data,
+            borderColor: '#F59E0B',   // yellow
             borderWidth: 1.5,
             pointRadius: 0,
             fill: false,
             borderDash: [4, 3],
-            tension: 0.1
+            tension: 0.1,
+            spanGaps: true
         },
         {
+            type: 'line',
             label: 'MA50',
-            data: ma50,
-            borderColor: '#12C286',
+            data: ma50Data,
+            borderColor: '#3B82F6',   // blue
             borderWidth: 1.5,
             pointRadius: 0,
             fill: false,
             borderDash: [6, 4],
-            tension: 0.1
+            tension: 0.1,
+            spanGaps: true
         }
     ];
     
-    if (trendChart) {
-        trendChart.data.labels = labels;
-        trendChart.data.datasets = datasets;
-        trendChart.update('none');
-    } else {
-        trendChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: datasets
+    trendChart = new Chart(ctx, {
+        type: 'candlestick',
+        data: { datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                plugins: {
+            plugins: {
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                        onPan: ({chart}) => {
+                            syncXAxis(chart, volumeChart);
+                            autoScaleY(chart);
+                            chart.update('none');
+                            updateInsightsFromChart();
+                        }
+                    },
                     zoom: {
-                        limits: {
-                            x: {
-                                min: 0,
-                                max: 'original',
-                                minRange: 10
-                            }
-                        },
-                        pan: {
-                            enabled: true,
-                            mode: 'x',
-                            onPan: ({chart}) => {
-                                syncXAxis(chart, volumeChart);
-                                autoScaleY(chart);
-                                chart.update('none');
-                                updateInsightsFromChart();
-                            }
-                        },
-                        zoom: {
-                            wheel: {
-                                enabled: true,
-                                speed: 0.1
-                            },
-                            pinch: {
-                                enabled: true
-                            },
-                            mode: 'x',
-                            onZoom: ({chart}) => {
-                                syncXAxis(chart, volumeChart);
-                                autoScaleY(chart);
-                                chart.update('none');
-                                updateInsightsFromChart();
-                            }
-                        }
-                    },
-                    legend: {
-                        display: true,
-                        labels: {
-                            color: '#9CA3AF',
-                            font: { family: 'Inter', size: 10 }
-                        }
-                    },
-                    tooltip: {
-                        backgroundColor: '#141A21',
-                        borderColor: '#2A3441',
-                        borderWidth: 1,
-                        padding: 12,
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) label += ': Rp ';
-                                if (context.parsed.y !== null) {
-                                    label += context.parsed.y.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-                                }
-                                return label;
-                            }
+                        wheel: { enabled: true, speed: 0.1 },
+                        pinch: { enabled: true },
+                        mode: 'x',
+                        onZoom: ({chart}) => {
+                            syncXAxis(chart, volumeChart);
+                            autoScaleY(chart);
+                            chart.update('none');
+                            updateInsightsFromChart();
                         }
                     }
                 },
-                scales: {
-                    x: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
-                        ticks: { color: '#9CA3AF', font: { family: 'Inter', size: 10 }, maxTicksLimit: 8 }
-                    },
-                    y: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
-                        ticks: {
-                            color: '#9CA3AF',
-                            font: { family: 'Inter', size: 10 },
-                            callback: function(value) { return 'Rp ' + value.toLocaleString('id-ID'); }
-                        },
-                        afterFit: function(scaleInstance) {
-                            scaleInstance.width = 90;
+                legend: {
+                    display: true,
+                    labels: {
+                        color: '#9CA3AF',
+                        font: { family: 'Inter', size: 10 },
+                        filter: function(item) {
+                            return item.text === 'MA20' || item.text === 'MA50';
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#141A21',
+                    borderColor: '#2A3441',
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            const ds = context.dataset;
+                            if (ds.type === 'candlestick') {
+                                const d = context.raw;
+                                return [
+                                    `Open : Rp ${d.o.toLocaleString('id-ID')}`,
+                                    `High : Rp ${d.h.toLocaleString('id-ID')}`,
+                                    `Low  : Rp ${d.l.toLocaleString('id-ID')}`,
+                                    `Close: Rp ${d.c.toLocaleString('id-ID')}`
+                                ];
+                            }
+                            let label = ds.label || '';
+                            if (label) label += ': Rp ';
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y.toLocaleString('id-ID', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+                            }
+                            return label;
                         }
                     }
                 }
+            },
+            scales: {
+                x: {
+                    type: 'timeseries',
+                    time: { unit: 'month', tooltipFormat: 'dd MMM yyyy' },
+                    adapters: { date: { locale: 'id' } },
+                    grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
+                    ticks: { color: '#9CA3AF', font: { family: 'Inter', size: 10 }, maxTicksLimit: 8 }
+                },
+                y: {
+                    grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
+                    ticks: {
+                        color: '#9CA3AF',
+                        font: { family: 'Inter', size: 10 },
+                        callback: function(value) { return 'Rp ' + value.toLocaleString('id-ID'); }
+                    },
+                    afterFit: function(scaleInstance) {
+                        scaleInstance.width = 90;
+                    }
+                }
             }
-        });
-    }
+        }
+    });
 }
 
 // Chart 3: Volume Chart
-function updateVolumeChart(labels, volume, warnaVolume) {
+function updateVolumeChart(resampled) {
     const ctx = document.getElementById('volumeChart').getContext('2d');
+    
+    if (volumeChart) {
+        volumeChart.destroy();
+        volumeChart = null;
+    }
+    
+    const volumeData = resampled.map(item => ({
+        x: new Date(item.date).getTime(),
+        y: item.volume
+    }));
+    const barColors = resampled.map(item => item.warna_volume || '#9CA3AF');
     
     const datasets = [
         {
             label: 'Volume Perdagangan',
-            data: volume,
-            backgroundColor: warnaVolume,
-            borderColor: warnaVolume,
+            data: volumeData,
+            backgroundColor: barColors,
+            borderColor: barColors,
             borderWidth: 1,
             barPercentage: 0.85,
             categoryPercentage: 0.95
         }
     ];
     
-    if (volumeChart) {
-        volumeChart.data.labels = labels;
-        volumeChart.data.datasets = datasets;
-        volumeChart.update('none');
-    } else {
-        volumeChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: datasets
+    volumeChart = new Chart(ctx, {
+        type: 'bar',
+        data: { datasets: datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: {
+                mode: 'index',
+                intersect: false
             },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                interaction: {
-                    mode: 'index',
-                    intersect: false
-                },
-                plugins: {
-                    zoom: {
-                        limits: {
-                            x: {
-                                min: 0,
-                                max: 'original',
-                                minRange: 10
-                            }
-                        },
-                        pan: {
-                            enabled: true,
-                            mode: 'x',
-                            onPan: ({chart}) => {
-                                syncXAxis(chart, trendChart);
-                                autoScaleY(trendChart);
-                                chart.update('none');
-                                updateInsightsFromChart();
-                            }
-                        },
-                        zoom: {
-                            wheel: {
-                                enabled: true,
-                                speed: 0.1
-                            },
-                            pinch: {
-                                enabled: true
-                            },
-                            mode: 'x',
-                            onZoom: ({chart}) => {
-                                syncXAxis(chart, trendChart);
-                                autoScaleY(trendChart);
-                                chart.update('none');
-                                updateInsightsFromChart();
-                            }
+            plugins: {
+                zoom: {
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                        onPan: ({chart}) => {
+                            syncXAxis(chart, trendChart);
+                            autoScaleY(trendChart);
+                            chart.update('none');
+                            updateInsightsFromChart();
                         }
                     },
-                    legend: {
-                        display: false
-                    },
-                    tooltip: {
-                        backgroundColor: '#141A21',
-                        borderColor: '#2A3441',
-                        borderWidth: 1,
-                        padding: 12,
-                        callbacks: {
-                            label: function(context) {
-                                let label = context.dataset.label || '';
-                                if (label) label += ': ';
-                                if (context.parsed.y !== null) {
-                                    label += context.parsed.y.toLocaleString('id-ID') + ' lembar';
-                                }
-                                return label;
-                            }
+                    zoom: {
+                        wheel: { enabled: true, speed: 0.1 },
+                        pinch: { enabled: true },
+                        mode: 'x',
+                        onZoom: ({chart}) => {
+                            syncXAxis(chart, trendChart);
+                            autoScaleY(trendChart);
+                            chart.update('none');
+                            updateInsightsFromChart();
                         }
                     }
                 },
-                scales: {
-                    x: {
-                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
-                        ticks: { color: '#9CA3AF', font: { family: 'Inter', size: 10 }, maxTicksLimit: 8 }
-                    },
-                    y: {
-                        min: 0,
-                        grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
-                        ticks: {
-                            color: '#9CA3AF',
-                            font: { family: 'Inter', size: 10 },
-                            callback: function(value) {
-                                if (value >= 1e9) return (value / 1e9).toFixed(1) + ' B';
-                                if (value >= 1e6) return (value / 1e6).toFixed(1) + ' M';
-                                if (value >= 1e3) return (value / 1e3).toFixed(1) + ' K';
-                                return value;
+                legend: { display: false },
+                tooltip: {
+                    backgroundColor: '#141A21',
+                    borderColor: '#2A3441',
+                    borderWidth: 1,
+                    padding: 12,
+                    callbacks: {
+                        label: function(context) {
+                            let label = context.dataset.label || '';
+                            if (label) label += ': ';
+                            if (context.parsed.y !== null) {
+                                label += context.parsed.y.toLocaleString('id-ID') + ' lembar';
                             }
-                        },
-                        afterFit: function(scaleInstance) {
-                            scaleInstance.width = 90;
+                            return label;
                         }
                     }
                 }
+            },
+            scales: {
+                x: {
+                    type: 'timeseries',
+                    time: { unit: 'month', tooltipFormat: 'dd MMM yyyy' },
+                    adapters: { date: { locale: 'id' } },
+                    grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
+                    ticks: { color: '#9CA3AF', font: { family: 'Inter', size: 10 }, maxTicksLimit: 8 }
+                },
+                y: {
+                    min: 0,
+                    grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
+                    ticks: {
+                        color: '#9CA3AF',
+                        font: { family: 'Inter', size: 10 },
+                        callback: function(value) {
+                            if (value >= 1e9) return (value / 1e9).toFixed(1) + ' B';
+                            if (value >= 1e6) return (value / 1e6).toFixed(1) + ' M';
+                            if (value >= 1e3) return (value / 1e3).toFixed(1) + ' K';
+                            return value;
+                        }
+                    },
+                    afterFit: function(scaleInstance) {
+                        scaleInstance.width = 90;
+                    }
+                }
             }
-        });
-    }
+        }
+    });
 }
 
 // Generate Insights Automatically
