@@ -108,16 +108,27 @@ def main():
     # Now we align all dataframes to the 252 active dates
     aligned_dfs = {}
     for ticker, df in processed_dfs.items():
+        # Find actual first trading date (where close > 0)
+        non_zero = df[df['close'] > 0]
+        if not non_zero.empty:
+            first_active_date = non_zero['date'].iloc[0]
+        else:
+            first_active_date = df['date'].iloc[0]
+            
         date_df = pd.DataFrame({'date': active_dates})
         merged = pd.merge(date_df, df, on='date', how='left')
+        
+        # Add active column based on the first actual trading date
+        merged['active'] = merged['date'] >= first_active_date
         
         # Fill missing values if any (e.g. minor holiday misalignments)
         merged = merged.ffill().bfill()
         
-        # Fill numeric fields with 0 and warna_volume with '#9CA3AF'
-        fill_values = {col: 0 for col in merged.columns if col not in ['warna_volume', 'date']}
+        # Fill numeric fields with 0 and warna_volume/active with appropriate defaults
+        fill_values = {col: 0 for col in merged.columns if col not in ['warna_volume', 'date', 'active']}
         fill_values['warna_volume'] = '#9CA3AF'
         merged.fillna(value=fill_values, inplace=True)
+        merged['active'] = merged['active'].fillna(True).astype(bool)
         
         # Now compute relative performance (rebased to 100 on the first day of this 252-day window)
         first_close = merged['close'].iloc[0]
@@ -146,7 +157,8 @@ def main():
                 "ma20": float(row['ma20']),
                 "ma50": float(row['ma50']),
                 "warna_volume": str(row['warna_volume']),
-                "rebased": float(row['rebased'])
+                "rebased": float(row['rebased']),
+                "active": bool(row['active'])
             })
             
     # Save prices.json

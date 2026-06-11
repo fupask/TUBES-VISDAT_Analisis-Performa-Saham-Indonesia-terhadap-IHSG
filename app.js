@@ -7,7 +7,8 @@ let trendChart = null;
 let volumeChart = null;
 
 // Timeframe state
-let currentTimeframe = 'daily';
+let currentTimeframe = 'daily'; // controls trendChart & volumeChart
+let relativeTimeframe = 'daily'; // controls relativeChart
 
 // Sync lock to prevent recursive updates between linked charts
 let isSyncing = false;
@@ -64,7 +65,7 @@ async function initDashboard() {
         // Init Selected Stock detail charts and insights
         const stockSelect = document.getElementById('stock-select');
         
-        // Setup global timeframe button selector
+        // Setup global timeframe button selector (controls trend & volume charts only)
         const tfSelector = document.getElementById('timeframe-selector');
         tfSelector.querySelectorAll('.tf-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
@@ -72,7 +73,20 @@ async function initDashboard() {
                 e.target.classList.add('active');
                 currentTimeframe = e.target.dataset.tf;
                 
-                updateAllViews();
+                const currentStock = document.getElementById('stock-select').value;
+                updateSelectedStockView(currentStock);
+            });
+        });
+
+        // Setup relative performance timeframe button selector (controls relative chart only)
+        const relTfSelector = document.getElementById('relative-timeframe-selector');
+        relTfSelector.querySelectorAll('.tf-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                relTfSelector.querySelectorAll('.tf-btn').forEach(b => b.classList.remove('active'));
+                e.target.classList.add('active');
+                relativeTimeframe = e.target.dataset.tf;
+                
+                updateRelativeChart();
             });
         });
         
@@ -387,7 +401,10 @@ function updateInsightsFromChart() {
     const ticker = document.getElementById('stock-select').value;
     const stockData = pricesData[ticker];
     if (!stockData) return;
-    const resampled = resampleDataset(stockData, currentTimeframe);
+    
+    // Filter out pre-IPO/inactive days so insights are correct
+    const activeStockData = stockData.filter(item => item.active !== false);
+    const resampled = resampleDataset(activeStockData, currentTimeframe);
     const visibleData = getVisibleStockData(trendChart, resampled);
     generateInsights(ticker, visibleData);
 }
@@ -523,12 +540,24 @@ function updateRelativeChart() {
     if (!relativeChart || !pricesData) return;
     
     const rawIHSG = pricesData["IHSG"];
-    const resampledIHSG = resampleDataset(rawIHSG, currentTimeframe);
+    const resampledIHSG = resampleDataset(rawIHSG, relativeTimeframe);
     const labels = resampledIHSG.map(item => item.date);
     
     const datasets = Object.keys(pricesData).map(ticker => {
-        const resampled = resampleDataset(pricesData[ticker], currentTimeframe);
-        const rebasedData = resampled.map(item => item.rebased);
+        const resampled = resampleDataset(pricesData[ticker], relativeTimeframe);
+        
+        // Rebase relative to the first active day
+        const firstActiveItem = resampled.find(item => item.active !== false);
+        const firstClose = firstActiveItem ? firstActiveItem.close : null;
+        
+        const rebasedData = resampled.map(item => {
+            if (firstClose !== null && item.active !== false) {
+                return firstClose !== 0 ? (item.close / firstClose) * 100 : 100;
+            } else {
+                return null;
+            }
+        });
+        
         return {
             label: ticker === 'IHSG' ? 'IHSG (Benchmark)' : ticker,
             data: rebasedData,
@@ -572,7 +601,9 @@ function updateSelectedStockView(ticker) {
     const stockData = pricesData[ticker];
     if (!stockData) return;
     
-    const resampled = resampleDataset(stockData, currentTimeframe);
+    // Filter out pre-IPO/inactive days so detailed charts start on the listing date
+    const activeStockData = stockData.filter(item => item.active !== false);
+    const resampled = resampleDataset(activeStockData, currentTimeframe);
     
     updateTrendChart(resampled, ticker);
     updateVolumeChart(resampled);
