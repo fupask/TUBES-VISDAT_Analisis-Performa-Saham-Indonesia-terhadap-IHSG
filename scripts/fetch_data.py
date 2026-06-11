@@ -90,19 +90,11 @@ def main():
         df['ma20'] = df['close'].rolling(window=20).mean()
         df['ma50'] = df['close'].rolling(window=50).mean()
         
-        # Calculate Stochastic Oscillator (5, 3, 3)
-        df['low_5'] = df['low'].rolling(window=5).min()
-        df['high_5'] = df['high'].rolling(window=5).max()
-        
-        # Raw %K
-        denominator = df['high_5'] - df['low_5']
-        # Handle zero division if high and low are equal
-        df['raw_k'] = np.where(denominator != 0, 100 * (df['close'] - df['low_5']) / denominator, 50.0)
-        
-        # Smooth %K (3-day SMA)
-        df['k'] = df['raw_k'].rolling(window=3).mean()
-        # Smooth %D (3-day SMA of %K)
-        df['d'] = df['k'].rolling(window=3).mean()
+        # Calculate volume color based on daily price changes
+        df['prev_close'] = df['close'].shift(1)
+        df['warna_volume'] = np.where(df['close'] > df['prev_close'], '#12C286',
+                              np.where(df['close'] < df['prev_close'], '#FF5555', '#9CA3AF'))
+        df.loc[df['prev_close'].isna(), 'warna_volume'] = '#9CA3AF'
         
         # Replace NaNs or infinities if any using ffill and bfill
         df.replace([np.inf, -np.inf], np.nan, inplace=True)
@@ -121,7 +113,11 @@ def main():
         
         # Fill missing values if any (e.g. minor holiday misalignments)
         merged = merged.ffill().bfill()
-        merged.fillna(0, inplace=True)
+        
+        # Fill numeric fields with 0 and warna_volume with '#9CA3AF'
+        fill_values = {col: 0 for col in merged.columns if col not in ['warna_volume', 'date']}
+        fill_values['warna_volume'] = '#9CA3AF'
+        merged.fillna(value=fill_values, inplace=True)
         
         # Now compute relative performance (rebased to 100 on the first day of this 252-day window)
         first_close = merged['close'].iloc[0]
@@ -149,8 +145,7 @@ def main():
                 "volume": int(row['volume']),
                 "ma20": float(row['ma20']),
                 "ma50": float(row['ma50']),
-                "k": float(row['k']),
-                "d": float(row['d']),
+                "warna_volume": str(row['warna_volume']),
                 "rebased": float(row['rebased'])
             })
             

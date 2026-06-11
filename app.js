@@ -4,7 +4,7 @@ let metaData = null;
 
 let relativeChart = null;
 let trendChart = null;
-let momentumChart = null;
+let volumeChart = null;
 
 // Timeframe state
 let currentTimeframe = 'daily';
@@ -33,46 +33,6 @@ const ASSET_COLORS = {
     "BREN": "#10B981", // Green
     "AMMN": "#06B6D4"  // Cyan
 };
-
-// Custom Chart.js Plugin for Stochastic reference bands
-const horizontalLinePlugin = {
-    id: 'horizontalLine',
-    beforeDraw(chart) {
-        const { ctx, chartArea: { left, right }, scales: { y } } = chart;
-        
-        // This plugin should only run on the Momentum Chart (which has min/max scale of 0-100)
-        if (y.min !== 0 || y.max !== 100) return;
-        
-        ctx.save();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([5, 5]);
-        
-        // Draw line at 80 (Overbought)
-        const y80 = y.getPixelForValue(80);
-        ctx.beginPath();
-        ctx.moveTo(left, y80);
-        ctx.lineTo(right, y80);
-        ctx.stroke();
-        
-        // Draw line at 20 (Oversold)
-        const y20 = y.getPixelForValue(20);
-        ctx.beginPath();
-        ctx.moveTo(left, y20);
-        ctx.lineTo(right, y20);
-        ctx.stroke();
-        
-        // Add text labels
-        ctx.fillStyle = '#9CA3AF';
-        ctx.font = '10px Inter';
-        ctx.fillText('Overbought (80)', left + 5, y80 - 5);
-        ctx.fillText('Oversold (20)', left + 5, y20 + 12);
-        ctx.restore();
-    }
-};
-
-// Register plugin
-Chart.register(horizontalLinePlugin);
 
 // Document Ready
 document.addEventListener('DOMContentLoaded', () => {
@@ -127,7 +87,7 @@ async function initDashboard() {
         // Add double-click listeners on canvases for zoom reset
         const relativeCanvas = document.getElementById('relativePerformanceChart');
         const trendCanvas = document.getElementById('trendChart');
-        const momentumCanvas = document.getElementById('momentumChart');
+        const volumeCanvas = document.getElementById('volumeChart');
         
         relativeCanvas.addEventListener('dblclick', () => {
             handleChartReset(relativeChart);
@@ -135,16 +95,16 @@ async function initDashboard() {
         
         trendCanvas.addEventListener('dblclick', () => {
             handleChartReset(trendChart);
-            if (momentumChart) {
-                syncXAxis(trendChart, momentumChart);
+            if (volumeChart) {
+                syncXAxis(trendChart, volumeChart);
             }
             updateInsightsFromChart();
         });
         
-        momentumCanvas.addEventListener('dblclick', () => {
+        volumeCanvas.addEventListener('dblclick', () => {
             handleChartReset(trendChart);
-            if (momentumChart) {
-                syncXAxis(trendChart, momentumChart);
+            if (volumeChart) {
+                syncXAxis(trendChart, volumeChart);
             }
             updateInsightsFromChart();
         });
@@ -295,7 +255,6 @@ function getMondayDate(dateStr) {
 // Helper to determine min and max values of visible data arrays for vertical scaling
 function autoScaleY(chart) {
     if (!chart || !chart.scales || !chart.scales.x || !chart.scales.y) return;
-    if (chart.canvas.id === 'momentumChart') return; // Keep Momentum fixed 0-100
     
     const xScale = chart.scales.x;
     const minIndex = Math.max(0, Math.floor(xScale.min));
@@ -318,10 +277,15 @@ function autoScaleY(chart) {
     });
     
     if (minVal !== Infinity && maxVal !== -Infinity) {
-        const range = maxVal - minVal;
-        const buffer = range * 0.05 || 1.0; // 5% buffer on top/bottom
-        chart.options.scales.y.min = minVal - buffer;
-        chart.options.scales.y.max = maxVal + buffer;
+        if (chart.canvas.id === 'volumeChart') {
+            chart.options.scales.y.min = 0;
+            chart.options.scales.y.max = maxVal * 1.1; // 10% buffer
+        } else {
+            const range = maxVal - minVal;
+            const buffer = range * 0.05 || 1.0; // 5% buffer on top/bottom
+            chart.options.scales.y.min = minVal - buffer;
+            chart.options.scales.y.max = maxVal + buffer;
+        }
     }
 }
 
@@ -540,11 +504,11 @@ function updateSelectedStockView(ticker) {
     const closePrices = resampled.map(item => item.close);
     const ma20 = resampled.map(item => item.ma20);
     const ma50 = resampled.map(item => item.ma50);
-    const k = resampled.map(item => item.k);
-    const d = resampled.map(item => item.d);
+    const volume = resampled.map(item => item.volume);
+    const warnaVolume = resampled.map(item => item.warna_volume);
     
     updateTrendChart(labels, closePrices, ma20, ma50, ticker);
-    updateMomentumChart(labels, k, d);
+    updateVolumeChart(labels, volume, warnaVolume);
     
     const N = labels.length;
     const defaultZoom = getDefaultZoom(N);
@@ -558,10 +522,11 @@ function updateSelectedStockView(ticker) {
         autoScaleY(trendChart);
         trendChart.update('none');
     }
-    if (momentumChart) {
-        momentumChart.options.scales.x.min = minIndex;
-        momentumChart.options.scales.x.max = maxIndex;
-        momentumChart.update('none');
+    if (volumeChart) {
+        volumeChart.options.scales.x.min = minIndex;
+        volumeChart.options.scales.x.max = maxIndex;
+        autoScaleY(volumeChart);
+        volumeChart.update('none');
     }
     
     const visibleData = getVisibleStockData(trendChart, resampled);
@@ -636,7 +601,7 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
                             enabled: true,
                             mode: 'x',
                             onPan: ({chart}) => {
-                                syncXAxis(chart, momentumChart);
+                                syncXAxis(chart, volumeChart);
                                 autoScaleY(chart);
                                 chart.update('none');
                                 updateInsightsFromChart();
@@ -652,7 +617,7 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
                             },
                             mode: 'x',
                             onZoom: ({chart}) => {
-                                syncXAxis(chart, momentumChart);
+                                syncXAxis(chart, volumeChart);
                                 autoScaleY(chart);
                                 chart.update('none');
                                 updateInsightsFromChart();
@@ -705,36 +670,29 @@ function updateTrendChart(labels, closePrices, ma20, ma50, ticker) {
     }
 }
 
-// Chart 3: Momentum Chart
-function updateMomentumChart(labels, k, d) {
-    const ctx = document.getElementById('momentumChart').getContext('2d');
+// Chart 3: Volume Chart
+function updateVolumeChart(labels, volume, warnaVolume) {
+    const ctx = document.getElementById('volumeChart').getContext('2d');
     
     const datasets = [
         {
-            label: '%K (Cepat)',
-            data: k,
-            borderColor: '#06B6D4',
-            borderWidth: 1.8,
-            pointRadius: 0,
-            tension: 0.15
-        },
-        {
-            label: '%D (Lambat)',
-            data: d,
-            borderColor: '#EC4899',
-            borderWidth: 1.8,
-            pointRadius: 0,
-            tension: 0.15
+            label: 'Volume Perdagangan',
+            data: volume,
+            backgroundColor: warnaVolume,
+            borderColor: warnaVolume,
+            borderWidth: 1,
+            barPercentage: 0.85,
+            categoryPercentage: 0.95
         }
     ];
     
-    if (momentumChart) {
-        momentumChart.data.labels = labels;
-        momentumChart.data.datasets = datasets;
-        momentumChart.update('none');
+    if (volumeChart) {
+        volumeChart.data.labels = labels;
+        volumeChart.data.datasets = datasets;
+        volumeChart.update('none');
     } else {
-        momentumChart = new Chart(ctx, {
-            type: 'line',
+        volumeChart = new Chart(ctx, {
+            type: 'bar',
             data: {
                 labels: labels,
                 datasets: datasets
@@ -783,11 +741,7 @@ function updateMomentumChart(labels, k, d) {
                         }
                     },
                     legend: {
-                        display: true,
-                        labels: {
-                            color: '#9CA3AF',
-                            font: { family: 'Inter', size: 10 }
-                        }
+                        display: false
                     },
                     tooltip: {
                         backgroundColor: '#141A21',
@@ -798,7 +752,9 @@ function updateMomentumChart(labels, k, d) {
                             label: function(context) {
                                 let label = context.dataset.label || '';
                                 if (label) label += ': ';
-                                if (context.parsed.y !== null) label += context.parsed.y.toFixed(2);
+                                if (context.parsed.y !== null) {
+                                    label += context.parsed.y.toLocaleString('id-ID') + ' lembar';
+                                }
                                 return label;
                             }
                         }
@@ -811,9 +767,17 @@ function updateMomentumChart(labels, k, d) {
                     },
                     y: {
                         min: 0,
-                        max: 100,
                         grid: { color: 'rgba(255, 255, 255, 0.05)', drawTicks: false },
-                        ticks: { color: '#9CA3AF', font: { family: 'Inter', size: 10 } },
+                        ticks: {
+                            color: '#9CA3AF',
+                            font: { family: 'Inter', size: 10 },
+                            callback: function(value) {
+                                if (value >= 1e9) return (value / 1e9).toFixed(1) + ' B';
+                                if (value >= 1e6) return (value / 1e6).toFixed(1) + ' M';
+                                if (value >= 1e3) return (value / 1e3).toFixed(1) + ' K';
+                                return value;
+                            }
+                        },
                         afterFit: function(scaleInstance) {
                             scaleInstance.width = 90;
                         }
@@ -835,8 +799,7 @@ function generateInsights(ticker, stockData) {
     const close = latest.close;
     const ma20 = latest.ma20;
     const ma50 = latest.ma50;
-    const k = latest.k;
-    const d = latest.d;
+    const latestVolume = latest.volume;
     
     // Calculate returns
     const stockReturn = ((close - first.close) / first.close * 100).toFixed(1);
@@ -872,52 +835,47 @@ function generateInsights(ticker, stockData) {
         shortTermTrend = `Di jangka pendek, harga tertekan di bawah MA20 (Rp ${ma20.toLocaleString('id-ID')}), menunjukkan adanya pelemahan tren jangka pendek.`;
     }
     
-    // Check for Golden Cross/Death Cross crossover in the last 5 periods of this window
-    let crossoverInsight = "";
-    let crossoverDetected = false;
-    for (let i = stockData.length - 1; i >= Math.max(1, stockData.length - 5); i--) {
-        const curr = stockData[i];
-        const previous = stockData[i - 1];
-        
-        if (previous.k <= previous.d && curr.k > curr.d && curr.k < 35) {
-            crossoverInsight = `Telah terjadi sinyal momentum <strong>Golden Cross</strong> (garis %K memotong ke atas garis %D) di area oversold pada tanggal ${curr.date}, mengindikasikan potensi titik balik pembalikan arah naik (rebound).`;
-            crossoverDetected = true;
-            break;
-        }
-        if (previous.k >= previous.d && curr.k < curr.d && curr.k > 65) {
-            crossoverInsight = `Telah terjadi sinyal momentum <strong>Death Cross</strong> (garis %K memotong ke bawah garis %D) di area overbought pada tanggal ${curr.date}, mengindikasikan potensi pembalikan arah turun (koreksi).`;
-            crossoverDetected = true;
-            break;
-        }
-    }
-    
     // Update Trend Badge
     const trBadgeEl = document.getElementById('stock-trend-badge');
-    trBadgeEl.textContent = trendBadge;
-    trBadgeEl.className = `badge ${trendBadgeClass}`;
-    
-    // 2. Determine Momentum Badge & Text
-    let momentumBadge = "Netral";
-    let momentumBadgeClass = "badge-neutral";
-    let momentumInsightText = "";
-    
-    if (k > 80 && d > 80) {
-        momentumBadge = "Overbought";
-        momentumBadgeClass = "badge-bearish";
-        momentumInsightText = `Momentum Stochastic Oscillator saat ini berada pada angka <strong>%K: ${k.toFixed(1)} / %D: ${d.toFixed(1)}</strong>, yang menunjukkan kondisi <strong>Overbought (Jenuh Beli)</strong>. Pengguna disarankan waspada karena harga berada di area rawan aksi ambil untung (profit taking).`;
-    } else if (k < 20 && d < 20) {
-        momentumBadge = "Oversold";
-        momentumBadgeClass = "badge-bullish";
-        momentumInsightText = `Momentum Stochastic Oscillator saat ini berada pada angka <strong>%K: ${k.toFixed(1)} / %D: ${d.toFixed(1)}</strong>, menunjukkan kondisi <strong>Oversold (Jenuh Jual)</strong>. Kondisi ini sering kali menarik pembeli karena harga secara teknikal dinilai sudah terlampau murah.`;
-    } else {
-        momentumBadge = "Netral";
-        momentumBadgeClass = "badge-neutral";
-        momentumInsightText = `Momentum Stochastic berada di zona netral (<strong>%K: ${k.toFixed(1)} / %D: ${d.toFixed(1)}</strong>). Pergerakan momentum saat ini cenderung stabil tanpa sinyal ekstrem.`;
+    if (trBadgeEl) {
+        trBadgeEl.textContent = trendBadge;
+        trBadgeEl.className = `badge ${trendBadgeClass}`;
     }
     
-    const momBadgeEl = document.getElementById('stock-momentum-badge');
-    momBadgeEl.textContent = momentumBadge;
-    momBadgeEl.className = `badge ${momentumBadgeClass}`;
+    // 2. Determine Volume Badge & Text
+    const nPeriods = Math.min(stockData.length, 20);
+    let totalVolume = 0;
+    for (let i = stockData.length - nPeriods; i < stockData.length; i++) {
+        totalVolume += stockData[i].volume;
+    }
+    const avgVolume20 = totalVolume / nPeriods;
+    
+    let volumeBadge = "Volume Normal";
+    let volumeBadgeClass = "badge-neutral";
+    let volumeInsightText = "";
+    
+    // Calculate percentage difference of latest volume vs 20-period average volume
+    const pctDiff = avgVolume20 !== 0 ? ((latestVolume - avgVolume20) / avgVolume20 * 100) : 0;
+    
+    if (pctDiff > 20) {
+        volumeBadge = "Volume Tinggi";
+        volumeBadgeClass = "badge-bullish";
+        volumeInsightText = `Volume perdagangan terbaru sebesar <strong>${latestVolume.toLocaleString('id-ID')} lembar</strong> meningkat signifikan (<strong>+${pctDiff.toFixed(1)}%</strong>) dibanding rata-rata 20 periode terakhir (<strong>${Math.round(avgVolume20).toLocaleString('id-ID')} lembar</strong>), menunjukkan peningkatan aktivitas pasar.`;
+    } else if (pctDiff < -20) {
+        volumeBadge = "Volume Rendah";
+        volumeBadgeClass = "badge-bearish";
+        volumeInsightText = `Volume perdagangan terbaru sebesar <strong>${latestVolume.toLocaleString('id-ID')} lembar</strong> menurun signifikan (<strong>${pctDiff.toFixed(1)}%</strong>) dibanding rata-rata 20 periode terakhir (<strong>${Math.round(avgVolume20).toLocaleString('id-ID')} lembar</strong>), menunjukkan penurunan aktivitas pasar (transaksi cenderung sepi).`;
+    } else {
+        volumeBadge = "Volume Normal";
+        volumeBadgeClass = "badge-neutral";
+        volumeInsightText = `Volume perdagangan terbaru sebesar <strong>${latestVolume.toLocaleString('id-ID')} lembar</strong> bergerak stabil (<strong>${pctDiff >= 0 ? '+' : ''}${pctDiff.toFixed(1)}%</strong>) dekat rata-rata 20 periode terakhir (<strong>${Math.round(avgVolume20).toLocaleString('id-ID')} lembar</strong>), mencerminkan aktivitas pasar yang wajar.`;
+    }
+    
+    const momBadgeEl = document.getElementById('stock-volume-badge');
+    if (momBadgeEl) {
+        momBadgeEl.textContent = volumeBadge;
+        momBadgeEl.className = `badge ${volumeBadgeClass}`;
+    }
     
     // 3. Performance vs IHSG Text
     let relativePerformanceText = "";
@@ -929,17 +887,34 @@ function generateInsights(ticker, stockData) {
         relativePerformanceText = `Saham <strong>${ticker}</strong> bergerak <span class="text-danger">tertinggal</span> dibandingkan indeks IHSG (Underperformer) selama rentang waktu visualisasi ini, dengan imbal hasil total sebesar <strong>${stockReturn}%</strong> dibandingkan IHSG yang sebesar <strong>${ihsgReturn}%</strong>.`;
     }
     
+    // 4. Determine Confirmation Text
+    let confirmationText = "";
+    const isPriceUp = latest.close > prev.close;
+    const isPriceDown = latest.close < prev.close;
+    
+    if (isPriceUp && pctDiff > 20) {
+        confirmationText = `Kenaikan harga yang didukung oleh volume transaksi tinggi mengindikasikan akumulasi beli yang solid dari pelaku pasar, memberikan konfirmasi bahwa tren kenaikan harga ini memiliki fondasi yang kuat.`;
+    } else if (isPriceUp && pctDiff < -20) {
+        confirmationText = `Kenaikan harga terjadi di tengah volume transaksi yang rendah, mengindikasikan lemahnya minat beli dari pasar. Kenaikan harga ini rentan mengalami koreksi karena kurang didukung aktivitas transaksi yang kuat.`;
+    } else if (isPriceDown && pctDiff > 20) {
+        confirmationText = `Penurunan harga yang disertai lonjakan volume transaksi mengindikasikan tekanan jual yang tinggi (distribusi aktif), memberikan konfirmasi bahwa tren penurunan harga saat ini cukup kuat.`;
+    } else if (isPriceDown && pctDiff < -20) {
+        confirmationText = `Penurunan harga terjadi dengan volume transaksi yang rendah, menunjukkan tekanan jual yang relatif terbatas dan mengindikasikan potensi konsolidasi atau koreksi teknikal sementara.`;
+    } else {
+        confirmationText = `Pergerakan harga terkini didukung oleh volume transaksi yang normal, menunjukkan keseimbangan aktivitas antara pembeli dan penjual tanpa adanya dominasi transaksi yang mencolok.`;
+    }
+    
     // Assemble final bullet points
     let htmlContent = `
-        <p>Berdasarkan analisis data penutupan historis dan indikator teknikal untuk saham <strong>${TICKER_NAMES[ticker]} (${ticker})</strong> dalam rentang waktu yang ditampilkan, berikut rangkuman analisis tren dan momentumnya:</p>
+        <p>Berdasarkan analisis data penutupan historis dan aktivitas transaksi untuk saham <strong>${TICKER_NAMES[ticker]} (${ticker})</strong> dalam rentang waktu yang ditampilkan, berikut rangkuman analisis tren dan volumenya:</p>
         <ul>
-            <li><strong>Analisis Performa Relatif:</strong> ${relativePerformanceText}</li>
-            <li><strong>Analisis Tren (Moving Average):</strong> Saham ${ticker} saat ini menunjukkan tren ${trendInsightText} ${shortTermTrend}</li>
-            <li><strong>Analisis Momentum (Stochastic):</strong> ${momentumInsightText}</li>
-            ${crossoverDetected ? `<li><strong>Sinyal Khusus:</strong> ${crossoverInsight}</li>` : ''}
+            <li><strong>Performa:</strong> ${relativePerformanceText}</li>
+            <li><strong>Tren:</strong> Saham ${ticker} saat ini menunjukkan tren ${trendInsightText} ${shortTermTrend}</li>
+            <li><strong>Volume:</strong> ${volumeInsightText}</li>
+            <li><strong>Konfirmasi:</strong> ${confirmationText}</li>
         </ul>
         <p style="margin-top: 16px; font-size: 0.9rem; color: var(--text-secondary); font-style: italic;">
-            *Catatan: Analisis ini diperbarui secara otomatis berdasarkan data historis penutupan terakhir dan tidak ditujukan sebagai rekomendasi finansial mutlak.
+            *Catatan: Analisis ini diperbarui secara otomatis berdasarkan data transaksi penutupan terakhir dan tidak ditujukan sebagai rekomendasi finansial mutlak.
         </p>
     `;
     
