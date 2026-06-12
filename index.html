@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Analisis Performa Saham Indonesia terhadap IHSG</title>
+    <title>Kinerja Saham Indonesia terhadap IHSG</title>
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -28,7 +28,7 @@
         <!-- Header -->
         <header class="app-header">
             <div class="header-content">
-                <h1 id="main-title">Analisis Performa Saham Indonesia terhadap IHSG</h1>
+                <h1 id="main-title">Kinerja Saham Indonesia terhadap IHSG</h1>
             </div>
             <div class="header-meta">
                 <span class="meta-label">Pembaruan Terakhir:</span>
@@ -41,7 +41,7 @@
             <!-- KPI 1: IHSG -->
             <div class="card kpi-card" id="kpi-ihsg-card">
                 <div class="kpi-header">
-                    <span class="kpi-title">IHSG Saat Ini</span>
+                    <span class="kpi-title">Nilai IHSG Terbaru</span>
                     <div class="kpi-icon-container">
                         <svg class="kpi-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                             xmlns="http://www.w3.org/2000/svg">
@@ -51,30 +51,30 @@
                     </div>
                 </div>
                 <div class="kpi-value" id="kpi-ihsg-val">0</div>
-                <div class="kpi-footer">Indeks Acuan Indonesia</div>
+                <div class="kpi-footer">Rata-rata harga pasar saham Indonesia</div>
             </div>
 
             <!-- KPI 2: Status Pasar -->
             <div class="card kpi-card" id="kpi-status-card">
                 <div class="kpi-header">
-                    <span class="kpi-title">Status Pasar</span>
+                    <span class="kpi-title">Kondisi Pasar</span>
                     <div class="kpi-icon-container">
                         <svg class="kpi-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                             xmlns="http://www.w3.org/2000/svg">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
+                                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2m0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z">
                             </path>
                         </svg>
                     </div>
                 </div>
                 <div class="kpi-value" id="kpi-status-val">-</div>
-                <div class="kpi-footer" id="kpi-status-desc">Memuat...</div>
+                <div class="kpi-footer" id="kpi-status-desc">Menganalisis...</div>
             </div>
 
             <!-- KPI 3: Top Outperformer -->
             <div class="card kpi-card" id="kpi-outperformer-card">
                 <div class="kpi-header">
-                    <span class="kpi-title">Top Outperformer</span>
+                    <span class="kpi-title">Kenaikan Terkuat</span>
                     <div class="kpi-icon-container text-success">
                         <svg class="kpi-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                             xmlns="http://www.w3.org/2000/svg">
@@ -85,13 +85,13 @@
                     </div>
                 </div>
                 <div class="kpi-value text-success" id="kpi-outperformer-val">-</div>
-                <div class="kpi-footer">Performa Terbaik vs IHSG</div>
+                <div class="kpi-footer">Saham paling unggul dibanding pasar</div>
             </div>
 
             <!-- KPI 4: Top Underperformer -->
             <div class="card kpi-card" id="kpi-underperformer-card">
                 <div class="kpi-header">
-                    <span class="kpi-title">Top Underperformer</span>
+                    <span class="kpi-title">Kinerja Terlemah</span>
                     <div class="kpi-icon-container text-danger">
                         <svg class="kpi-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"
                             xmlns="http://www.w3.org/2000/svg">
@@ -102,7 +102,7 @@
                     </div>
                 </div>
                 <div class="kpi-value text-danger" id="kpi-underperformer-val">-</div>
-                <div class="kpi-footer">Performa Terendah vs IHSG</div>
+                <div class="kpi-footer">Saham paling tertinggal dibanding pasar</div>
             </div>
         </section>
 
@@ -113,8 +113,8 @@
                 <div class="card overview-chart-card">
                     <div class="card-header">
                         <div>
-                            <h2>Status Tren IHSG (vs MA50)</h2>
-                            <p class="card-subtitle">Menentukan Status Pasar: Bullish/Bearish</p>
+                            <h2>Tren Pasar (IHSG)</h2>
+                            <p class="card-subtitle">Melihat arah pasar secara keseluruhan: Cenderung Naik atau Turun</p>
                         </div>
                     </div>
                     <div class="overview-chart-container">
@@ -126,17 +126,16 @@
                 <div class="card overview-heatmap-card">
                     <div class="card-header">
                         <div>
-                            <h2>Heatmap Performa Saham</h2>
-                            <p class="card-subtitle">Perubahan imbal hasil harga saham dari awal hingga akhir periode
-                                terpilih</p>
+                            <h2>Peta Perubahan Harga Saham</h2>
+                            <p class="card-subtitle">Perubahan harga saham selama periode yang dipilih</p>
                         </div>
                         <div class="filter-group">
-                            <span class="filter-label">Timeframe:</span>
+                            <span class="filter-label">Periode:</span>
                             <div class="timeframe-buttons" id="heatmap-timeframe-selector">
-                                <button class="tf-btn active" data-tf="daily">Daily</button>
-                                <button class="tf-btn" data-tf="weekly">Weekly</button>
-                                <button class="tf-btn" data-tf="monthly">Monthly</button>
-                                <button class="tf-btn" data-tf="yearly">Yearly</button>
+                                <button class="tf-btn active" data-tf="daily">Harian</button>
+                                <button class="tf-btn" data-tf="weekly">Mingguan</button>
+                                <button class="tf-btn" data-tf="monthly">Bulanan</button>
+                                <button class="tf-btn" data-tf="yearly">Tahunan</button>
                             </div>
                         </div>
                     </div>
@@ -154,19 +153,17 @@
             <div class="card chart-card">
                 <div class="card-header">
                     <div>
-                        <h2>Performa Relatif Saham terhadap IHSG</h2>
-                        <p class="card-subtitle">Perbandingan imbal hasil kumulatif saham terhadap IHSG (Skala
-                            Persentase, Dimulai dari 0%)</p>
-                        <p class="interaction-instruction">Klik & Seret untuk Geser | Scroll untuk Zoom | Klik 2x untuk
-                            Reset</p>
+                        <h2>Grafik Perbandingan Keuntungan Saham vs IHSG</h2>
+                        <p class="card-subtitle">Perbandingan persentase keuntungan akumulasi saham dengan IHSG dari titik awal periode</p>
+                        <p class="interaction-instruction">Geser grafik: Klik & tarik | Zoom: Gunakan scroll mouse | Reset: Klik 2x pada grafik</p>
                     </div>
                     <div class="filter-group">
-                        <span class="filter-label">Timeframe:</span>
+                        <span class="filter-label">Periode:</span>
                         <div class="timeframe-buttons" id="relative-timeframe-selector">
-                            <button class="tf-btn active" data-tf="daily">Daily</button>
-                            <button class="tf-btn" data-tf="weekly">Weekly</button>
-                            <button class="tf-btn" data-tf="monthly">Monthly</button>
-                            <button class="tf-btn" data-tf="yearly">Yearly</button>
+                            <button class="tf-btn active" data-tf="daily">Harian</button>
+                            <button class="tf-btn" data-tf="weekly">Mingguan</button>
+                            <button class="tf-btn" data-tf="monthly">Bulanan</button>
+                            <button class="tf-btn" data-tf="yearly">Tahunan</button>
                         </div>
                     </div>
                 </div>
@@ -195,12 +192,12 @@
                     </div>
                 </div>
                 <div class="filter-group">
-                    <span class="filter-label">Timeframe:</span>
+                    <span class="filter-label">Periode:</span>
                     <div class="timeframe-buttons" id="timeframe-selector">
-                        <button class="tf-btn active" data-tf="daily">Daily</button>
-                        <button class="tf-btn" data-tf="weekly">Weekly</button>
-                        <button class="tf-btn" data-tf="monthly">Monthly</button>
-                        <button class="tf-btn" data-tf="yearly">Yearly</button>
+                        <button class="tf-btn active" data-tf="daily">Harian</button>
+                        <button class="tf-btn" data-tf="weekly">Mingguan</button>
+                        <button class="tf-btn" data-tf="monthly">Bulanan</button>
+                        <button class="tf-btn" data-tf="yearly">Tahunan</button>
                     </div>
                 </div>
             </div>
@@ -211,14 +208,12 @@
                 <div class="card chart-card">
                     <div class="card-header">
                         <div>
-                            <h2>Analisis Tren Harga Saham <span class="selected-stock-ticker"></span></h2>
-                            <p class="card-subtitle">Harga Penutupan Historis, Rata-rata Bergerak 20 Hari (MA20), dan 50
-                                Hari (MA50)</p>
-                            <p class="interaction-instruction">Klik & Seret untuk Geser | Scroll untuk Zoom | Klik 2x
-                                untuk Reset</p>
+                            <h2>Grafik Pergerakan Harga Saham <span class="selected-stock-ticker"></span></h2>
+                            <p class="card-subtitle">Harga saham harian serta garis rata-rata 20 hari terakhir (tren jangka pendek) dan 50 hari terakhir (tren jangka menengah)</p>
+                            <p class="interaction-instruction">Geser grafik: Klik & tarik | Zoom: Gunakan scroll mouse | Reset: Klik 2x pada grafik</p>
                         </div>
                         <button id="ruler-tool-btn" class="ruler-btn"
-                            title="Pengukur Rentang Tanggal & Persentase Harga (Ruler)">
+                            title="Alat pengukur rentang waktu dan persentase perubahan harga">
                             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor"
                                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                 <line x1="5" y1="19" x2="19" y2="5"></line>
@@ -226,7 +221,7 @@
                                 <line x1="9" y1="10" x2="14" y2="15"></line>
                                 <line x1="14" y1="5" x2="19" y2="10"></line>
                             </svg>
-                            <span>Ruler</span>
+                            <span>Alat Ukur</span>
                         </button>
                     </div>
                     <div class="chart-container">
@@ -238,11 +233,9 @@
                 <div class="card chart-card">
                     <div class="card-header">
                         <div>
-                            <h2>Analisis Momentum MACD Saham <span class="selected-stock-ticker"></span></h2>
-                            <p class="card-subtitle">Moving Average Convergence Divergence (MACD) digunakan untuk
-                                mengidentifikasi kekuatan dan arah momentum tren harga saham.</p>
-                            <p class="interaction-instruction">Klik & Seret untuk Geser | Scroll untuk Zoom | Klik 2x
-                                untuk Reset</p>
+                            <h2>Grafik Dorongan Harga Saham (MACD) <span class="selected-stock-ticker"></span></h2>
+                            <p class="card-subtitle">Indikator MACD membantu melihat seberapa kuat dorongan naik atau turunnya harga saham saat ini.</p>
+                            <p class="interaction-instruction">Geser grafik: Klik & tarik | Zoom: Gunakan scroll mouse | Reset: Klik 2x pada grafik</p>
                         </div>
                     </div>
                     <div class="chart-container">
@@ -265,16 +258,16 @@
                                 d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 01-2 2h0a2 2 0 01-2-2v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z">
                             </path>
                         </svg>
-                        <h2>Ringkasan Analisis <span class="selected-stock-ticker-full"></span></h2>
+                        <h2>Kesimpulan & Ringkasan Analisis <span class="selected-stock-ticker-full"></span></h2>
                     </div>
                     <div class="stock-badge-container">
-                        <span id="insights-timeframe-note" class="badge badge-info">DAILY</span>
-                        <span id="stock-trend-badge" class="badge">Bullish</span>
-                        <span id="stock-volume-badge" class="badge">Momentum Neutral</span>
+                        <span id="insights-timeframe-note" class="badge badge-info">HARIAN</span>
+                        <span id="stock-trend-badge" class="badge">Tren Naik</span>
+                        <span id="stock-volume-badge" class="badge">Dorongan Netral</span>
                     </div>
                 </div>
                 <div class="insights-content" id="analysis-insights-box">
-                    <p>Memuat analisis saham...</p>
+                    <p>Sedang menganalisis data saham...</p>
                 </div>
             </div>
         </section>
@@ -282,7 +275,7 @@
         <!-- Footer -->
         <footer class="app-footer">
             <div class="footer-left">
-                <p>Indonesia Market Stock Dashboard.</p>
+                <p>Dashboard Kinerja Saham Indonesia.</p>
             </div>
         </footer>
     </div>
