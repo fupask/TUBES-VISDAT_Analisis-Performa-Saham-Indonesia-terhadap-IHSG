@@ -38,7 +38,7 @@ def main():
     for yf_ticker, clean_ticker in TICKER_MAP.items():
         print(f"Downloading {clean_ticker} ({yf_ticker})...")
         try:
-            df = yf.download(yf_ticker, start=start_date, end=end_date, progress=False)
+            df = yf.download(yf_ticker, start=start_date, end=end_date, progress=False, auto_adjust=True)
             if df.empty:
                 print(f"Warning: Could not fetch data for {clean_ticker}")
                 continue
